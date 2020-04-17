@@ -1,0 +1,12 @@
+{
+    "ignore": [
+        ".git",
+        "node_modules"
+    ],
+    "watch": [
+        "*.ts",
+        "server"
+    ],
+    "exec": "clear && ts-node server.ts",
+    "ext": "ts, js, json"
+}
