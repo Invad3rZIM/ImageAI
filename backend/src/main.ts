@@ -1,91 +1,95 @@
-
-const fs = require('fs');
-const PNG = require('pngjs').PNG;
-
-async function readPNGImage(url : string) : Promise<Kernel> {
-    let response : Kernel = await new Promise(async (res, rej) => {
-         fs.createReadStream(url).pipe(new PNG({
-                filterType: 4
-            })).once('parsed',  function(){
-
-                //let dataLength = this.data.length;
-                //let width = this.width;
-                //let height = this.height;
-
-                //console.log("D/W/H: " + dataLength + ", " + width + ", " + height);
-
-                //console.log(this.data[0])
-                console.log(this.data)
-                //console.log(this.data.constructorName);
-
-                res({buffer: this.data, cols: this.width, rows: this.height})
-            });
-        })  
-    return response
-
-}
-
-function readJPGImage(url : string) : Kernel {
-    let fs = require('fs')
-    let jpeg = require('jpeg-js');
-    let jpegData = fs.readFileSync(url);
-    let rawImageData = jpeg.decode(jpegData);
-
-    return {cols: rawImageData.width, rows: rawImageData.height, buffer: rawImageData.data}
-}
+var fs = require("fs");   
+let jpeg = require('jpeg-js');
+var pngparse = require("pngparse")
+var output = require('image-output')
 
 async function writeTmpFile(imageBuffer : number[]) {
     let fs = require('fs')
-    fs.writeFile('backend/src/tmp/logo.png', imageBuffer, 'binary', function(err){
+    fs.writeFile(__dirname + '/images/tmp/logo.png', imageBuffer, 'binary', function(err){
         if (err) throw err
     })
 }
 
-export async function testImage(){
+async function readPNGImage(url : string) : Promise<Kernel> {
+    let response : Kernel = await new Promise(async (res, rej) => {
+        pngparse.parseFile(url, function(err, data) {
+            console.log(err)
 
-    var output = require('image-output')
-    
-    // create chess pattern png from raw pixels data
-    output({
-        data: [0,0,0,1, 1,1,1,1, 1,1,1,1, 0,0,0,1],
-        width: 2,
-        height: 2
-    }, 'chess.png')
-
-    /*
-    fs.createReadStream("in.png")
-        .pipe(
-            new PNG({
-                filterType: 4,
-            })
-        )
-        .on("parsed", function () {
-            for (var y = 0; y < this.height; y++) {
-            for (var x = 0; x < this.width; x++) {
-                var idx = (this.width * y + x) << 2;
-
-                // invert color
-                this.data[idx] = 255 - this.data[idx];
-                this.data[idx + 1] = 255 - this.data[idx + 1];
-                this.data[idx + 2] = 255 - this.data[idx + 2];
-
-                // and reduce opacity
-                this.data[idx + 3] = this.data[idx + 3] >> 1;
-            }
+            if(err) {
+                throw err
             }
 
-            this.pack().pipe(fs.createWriteStream("./brett_test_001.png"));
-        });
-    */
+            let k : Kernel = new Kernel(data.height, data.width, data.data, KernelType.ImageKernel)
+            res(k)
+        })
+    });
+    return response
 }
 
-export async function filterImage(imageBuffer : number[] ) {  
-    await writeTmpFile(imageBuffer)
+function readJPGImage(url : string) : Kernel {
+    let jpegData = fs.readFileSync(url);
+    let rawImageData = jpeg.decode(jpegData);
 
-    let imageMatrix : Kernel = parseData( await readPNGImage("./backend/src/tmp/logo.png") )
+    return new Kernel(rawImageData.height, rawImageData.width, rawImageData.data, KernelType.ImageKernel)
+}
 
-    let rowKernel = {rows: 3, cols: 3, buffer: [ 0,-1,0,0,-1,0,0,-1,0]}
-    let columnKernel = {rows: 3, cols: 3, buffer: [0,0,0,-1,-1,-1,0,0,0]}
+function grayscaleToRGBA(kernel : Kernel, A : number = 1) : Kernel {
+    let imageMatrix = [];
+
+    for(let index = 0; index < kernel.matrix.length; index++) {
+        imageMatrix.push(kernel.matrix[index])
+        imageMatrix.push(kernel.matrix[index])
+        imageMatrix.push(kernel.matrix[index])
+        imageMatrix.push(1)
+    }
+
+    return new Kernel(kernel.rows, kernel.cols, imageMatrix);
+}
+
+export async function writeImageToPNGFile(kernel : Kernel, filepath: string){
+
+    let buffer = Buffer.from(kernel.matrix);
+    
+    console.log("new : ",buffer)
+
+    await output({
+        data: buffer,
+        width: 662,
+        height: 662,
+    }, filepath)
+}
+
+filterImage([])
+
+export async function filterImage(imageMatrix : number[] ) {  
+  //  writeTmpFile(imageMatrix)
+
+
+  
+    //console.log(imageMatrix)
+
+    let base = await readPNGImage(__dirname + "/images/tmp/logo.png") 
+
+    console.log("base: ",base.matrix)
+
+
+
+    
+    let matrix  =  parseImageToGrayscale( base)
+
+    await writeImageToPNGFile( matrix, __dirname + "/images/tmp/logoGrayscale.png" ) 
+    let newMatrix = readPNGImage(__dirname + "/images/tmp/logoGrayscale.png")
+
+  //  return newMatrix
+    return null;
+
+ //   console.log(matrix)
+
+
+  //  await writeImageToPNGFile(imageMatrix, "./backend/src/kaykay.png")
+
+  //  let rowKernel = {rows: 3, cols: 3, matrix: [ 0,-1,0,0,-1,0,0,-1,0]}
+  //  let columnKernel = {rows: 3, cols: 3, matrix: [0,0,0,-1,-1,-1,0,0,0]}
     
    /* let a : Kernel = cnnFilter(imageMatrix, rowKernel, 1)
     let b : Kernel = cnnFilter(imageMatrix, columnKernel, 2)
@@ -94,36 +98,35 @@ export async function filterImage(imageBuffer : number[] ) {
 
     for(let row = 0; row < a.rows; row++) {
         for(let col = 0; col < a.cols; col++) {
-            A.push(a.buffer[row * a.cols + col] + b.buffer[row * a.cols + col])
+            A.push(a.matrix[row * a.cols + col] + b.matrix[row * a.cols + col])
         }
     }
 
-    let filterBuffer: number[] = [];
+    let filtermatrix: number[] = [];
 
    /* for(let index = 0; index < A.length; index++) {
-        filterBuffer.push(A[index] * 255);
-        filterBuffer.push(A[index]* 255);
-        filterBuffer.push(A[index]* 255);
-        //filterBuffer.push(A[index] * 255);
+        filtermatrix.push(A[index] * 255);
+        filtermatrix.push(A[index]* 255);
+        filtermatrix.push(A[index]* 255);
+        //filtermatrix.push(A[index] * 255);
     }*/
     
-    let PNG = require('pngjs').PNG;
+  //  let PNG = require('pngjs').PNG;
 
-    var newPNG = new PNG({width: imageMatrix.cols, height: imageMatrix.rows})
-    newPNG.data = imageBuffer;
-
+  //  var newPNG = new PNG({width: imageMatrix.cols, height: imageMatrix.rows})
+    
 //    console.log(newPNG)
-    var fs = require("fs")
+  //  var fs = require("fs")
 
 
-    newPNG.pack().pipe(fs.createWriteStream("./backend/src/tmp/out.png"));
+//    newPNG.pack().pipe(fs.createWriteStream("./backend/src/tmp/out.png"));
     
 }
 
 function cnnFilter(m1: Kernel, filter : Kernel, value : number) : Kernel {
-    let m2Buffer : number[] = []
     let m2Rows : number = m1.rows - filter.rows + 1;
-    let m2Cols : number = m1.cols - filter.cols + 1;
+    let m2Cols : number = m1.cols - filter.cols + 1;   
+    let m2Matrix : number[] = []
 
     for(let row = 0; row < m2Rows; row++) {
         for(let col = 0; col < m2Cols; col++){
@@ -132,50 +135,72 @@ function cnnFilter(m1: Kernel, filter : Kernel, value : number) : Kernel {
             for(let filterRow = 0; filterRow < filter.rows; filterRow++) {
                 for(let filterCol = 0; filterCol < filter.cols; filterCol++) {
                     //dot = m1w1 + m2w2 + m3w3 + ... 
-                    dot += filter.buffer[filterRow * filter.cols + filterCol] * 
-                               m1.buffer[((row + filterRow) * m1.cols) + (col + filterCol)
+                    dot += filter.matrix[filterRow * filter.cols + filterCol] * 
+                               m1.matrix[((row + filterRow) * m1.cols) + (col + filterCol)
                         ]
                 }
             }
 
-            if(dot > -1) { m2Buffer.push(value)} else { m2Buffer.push(0)}
+            if(dot > -1) { m2Matrix.push(value)} else { m2Matrix.push(0)}
         }
     }
 
-    return {buffer: m2Buffer, cols: m2Cols, rows: m2Rows}
+    return new Kernel(m2Rows, m2Cols, m2Matrix)
 }
 
+enum KernelType {
+    AnyKernel = 0,
+    ImageKernel = 1,
+}
 
-
-interface Kernel {
+class Kernel {
     rows: number;
     cols: number;
-    buffer: number[];
+    matrix: number[];
+    kernelType: KernelType;
+
+    public constructor(rows : number, cols: number, matrix : number[], kernelType : KernelType = KernelType.AnyKernel) {
+        this.rows = rows;
+        this.cols = cols;
+        this.matrix = matrix;
+        this.kernelType = kernelType;
+    }
 }
 
-function parseData(data : Kernel) : Kernel {
-    let {rows, cols, buffer} = data;
+function parseImageToGrayscale(data : Kernel) : Kernel {
+    let {rows, cols, matrix} = data;
 
-    let rbga : number[][] = [[],[],[],[]];
+    let rgba : number[][] = [[],[],[],[]];
     let grayscale : number[] = [];
 
     for(let row = 0; row < cols; row++) {
         let s : string = "";
-        let gs : string = "";
 
         for(let col = 0; col < cols; col++) {
             //bitshift <<2 == * 4
             let idx = row * cols + col << 2
 
             for(let i = 0; i < 4; i++) {
-                rbga[i].push(buffer[idx+i])
+                rgba[i].push(matrix[idx+i])
             }
 
-            grayscale.push( (buffer[idx]+buffer[idx+1]+buffer[idx+2]) /3/255)
-            gs += grayscale[grayscale.length-1] + " ";
+            let G = rgbToGrayscale(matrix[idx], matrix[idx+1], matrix[idx+2])
+
+            grayscale.push( G) 
+            grayscale.push( G) 
+            grayscale.push( G) 
+            grayscale.push( 255)
+
+       //     console.log(matrix[idx], matrix[idx+1], matrix[idx+2], matrix[idx+3]) 
         }
     }
-    return {...data, buffer: grayscale}
+
+    return {...data, matrix: grayscale}
+}
+
+function rgbToGrayscale(R : number, G : number, B : number) {
+    return   ( (0.3 * R) + (0.59 * G) + (0.11 * B) )
 }
 
 ///THE #1 QUESTION WE SHOULD ASK INTERNS - what does CALLBACK HELL mean to YOU?
+

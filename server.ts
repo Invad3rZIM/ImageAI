@@ -1,28 +1,35 @@
-import {filterImage, testImage} from "./backend/src/main"
+import {filterImage} from "./backend/src/main"
 
-var express = require('express');
-var app = express();
-var server = require('http').Server(app);
-var io = require('socket.io')(server);
+async function main() {
+    var express = require('express');
+    var app = express();
+    var server = require('http').Server(app);
+    var io = require('socket.io')(server);
 
-app.use(express.static('frontend'));
+    app.use(express.static('frontend'));
 
-server.listen(80);
+    server.listen(80);
 
-io.on('connection', function (socket) {
+    console.log("server started")
 
-    testImage();
+    //filterImage([])
 
-    console.log("Connection");
-    socket.emit('news', { hello: 'world' });
-    
-    socket.on('image-upload', function (data) {
+    io.on('connection', function (socket) {
 
-        console.log(data)
+        console.log("Connection");
+        socket.emit('news', { hello: 'world' });
+        
+        socket.on('image-upload', async function (data) {
 
-        ///filterImage(data.buffer)
+            //console.log(data)
 
-        socket.emit('response image', data)
+            let filtered = await filterImage(data.buffer)
 
+            console.log(filtered.matrix.length)
+            socket.emit('response image', filtered.matrix)
+
+        });
     });
-});
+}
+
+main()
