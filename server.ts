@@ -25,7 +25,9 @@ async function main() {
 
             let filtered = await filterImage(data.buffer)
 
-            console.log(filtered.matrix.length)
+            
+
+            console.log(filtered)
             socket.emit('response image', filtered.matrix)
 
         });

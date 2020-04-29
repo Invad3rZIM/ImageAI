@@ -7,6 +7,6 @@
         "*.ts",
         "server"
     ],
-    "exec": "clear && ts-node backend/src/main.ts",
+    "exec": "clear && ts-node testbench/index.ts",
     "ext": "ts, js, json"
 }
